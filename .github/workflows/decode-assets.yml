@@ -17,8 +17,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p assets
-          if ls assets/_b64parts/logo.*.b64 >/dev/null 2>&1; then
-            cat assets/_b64parts/logo.*.b64 > assets/logo.png.b64
+          # Fix known 1-char MCP corruption in logo.01 (BpouYf -> BvouYf)
+          if [ -f assets/_b64parts/logo.01.b64 ]; then
+            sed -i 's/BpouYf/BvouYf/' assets/_b64parts/logo.01.b64
+            echo "sed-patched logo.01.b64 if needed"
+          fi
+          if ls assets/_b64parts/logo.[0-9][0-9].b64 >/dev/null 2>&1; then
+            cat assets/_b64parts/logo.[0-9][0-9].b64 > assets/logo.png.b64
             cp assets/logo.png.b64 assets/logo-solid.png.b64
             echo "assembled logo.png.b64 $(wc -c < assets/logo.png.b64) bytes"
           fi
@@ -31,7 +36,6 @@ jobs:
             echo "decoded logo-solid.png $(wc -c < assets/logo-solid.png) bytes"
           fi
           xxd -l 8 assets/logo.png
-          # verify size
           test $(wc -c < assets/logo.png.b64) -eq 40192
           test $(wc -c < assets/logo.png) -gt 1000
       - name: Commit assembled assets
