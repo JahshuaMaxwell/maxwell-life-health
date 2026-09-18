@@ -1,10 +1,11 @@
-name: Decode Tide Lantern assets
+name: Decode HOMELIGHT logo assets
 on:
   push:
     branches: [main]
     paths:
       - 'assets/*.b64'
       - 'assets/*.b64.r*'
+      - 'assets/_micro/**'
       - 'assets/logo.js.r*'
       - '.github/workflows/decode-assets.yml'
   workflow_dispatch:
@@ -15,70 +16,70 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Assemble chunked assets if complete
+      - name: Assemble parts
         run: |
           set -euo pipefail
           mkdir -p assets
+
+          if ls assets/_micro/logo.png.b64.p* >/dev/null 2>&1; then
+            N=$(ls assets/_micro/logo.png.b64.p* | wc -l | tr -d ' ')
+            echo "png micro parts=$N"
+            if [ "$N" = "85" ]; then
+              cat $(ls assets/_micro/logo.png.b64.p* | sort) > assets/logo.png.b64
+              echo "assembled logo.png.b64 $(wc -c < assets/logo.png.b64)"
+            else
+              echo "waiting for 85 png micro parts"
+            fi
+          fi
+
+          if ls assets/_micro/logo.js.p* >/dev/null 2>&1; then
+            N=$(ls assets/_micro/logo.js.p* | wc -l | tr -d ' ')
+            echo "js micro parts=$N"
+            if [ "$N" = "36" ]; then
+              cat $(ls assets/_micro/logo.js.p* | sort) > logo.js
+              echo "assembled logo.js $(wc -c < logo.js)"
+            else
+              echo "waiting for 36 js micro parts"
+            fi
+          fi
+
           png_parts=$(ls assets/logo.png.b64.r* 2>/dev/null | wc -l | tr -d ' ')
-          solid_parts=$(ls assets/logo-solid.png.b64.r* 2>/dev/null | wc -l | tr -d ' ')
           js_parts=$(ls assets/logo.js.r* 2>/dev/null | wc -l | tr -d ' ')
-          echo "parts png=$png_parts solid=$solid_parts js=$js_parts"
           if [ "$png_parts" = "7" ]; then
             cat $(ls assets/logo.png.b64.r* | sort) > assets/logo.png.b64
-            echo "assembled logo.png.b64 $(wc -c < assets/logo.png.b64) bytes"
-          else
-            echo "skip logo.png.b64 assemble (need 7 parts)"
-          fi
-          if [ "$solid_parts" = "7" ]; then
-            cat $(ls assets/logo-solid.png.b64.r* | sort) > assets/logo-solid.png.b64
-            echo "assembled logo-solid.png.b64 $(wc -c < assets/logo-solid.png.b64) bytes"
-          else
-            echo "skip logo-solid.png.b64 assemble (need 7 parts)"
           fi
           if [ "$js_parts" = "3" ]; then
             cat $(ls assets/logo.js.r* | sort) > logo.js
-            echo "assembled logo.js $(wc -c < logo.js) bytes"
-          else
-            echo "skip logo.js assemble (need 3 parts)"
           fi
-      - name: Decode base64 PNGs
+
+          if [ -f assets/logo.png.b64 ]; then
+            cp assets/logo.png.b64 assets/logo-solid.png.b64
+          fi
+      - name: Decode PNGs
         run: |
           set -euo pipefail
-          mkdir -p assets
-          if [ -f assets/logo.png.b64 ]; then
-            BYTES=$(wc -c < assets/logo.png.b64 | tr -d ' ')
-            if [ "$BYTES" -lt 1000 ]; then
-              echo "logo.png.b64 too small ($BYTES) — refusing decode"
-              exit 1
-            fi
-            base64 -d assets/logo.png.b64 > assets/logo.png
-            echo "decoded logo.png $(wc -c < assets/logo.png) bytes"
+          if [ ! -f assets/logo.png.b64 ]; then
+            echo "no b64 yet"; exit 0
           fi
-          if [ -f assets/logo-solid.png.b64 ]; then
-            BYTES=$(wc -c < assets/logo-solid.png.b64 | tr -d ' ')
-            if [ "$BYTES" -lt 1000 ]; then
-              echo "logo-solid.png.b64 too small ($BYTES) — refusing decode"
-              exit 1
-            fi
-            base64 -d assets/logo-solid.png.b64 > assets/logo-solid.png
-            echo "decoded logo-solid.png $(wc -c < assets/logo-solid.png) bytes"
-          fi
+          BYTES=$(wc -c < assets/logo.png.b64 | tr -d ' ')
+          if [ "$BYTES" -lt 1000 ]; then echo "b64 too small"; exit 1; fi
+          base64 -d assets/logo.png.b64 > assets/logo.png
+          cp assets/logo.png assets/logo-solid.png
+          echo "decoded $(wc -c < assets/logo.png)"
           xxd -l 8 assets/logo.png
-          PNG_BYTES=$(wc -c < assets/logo.png | tr -d ' ')
-          echo "logo.png bytes=$PNG_BYTES"
-          if [ "$PNG_BYTES" -lt 10000 ]; then
-            echo "decoded PNG suspiciously small"
-            exit 1
-          fi
-      - name: Commit PNGs and assembled files if changed
+          PNG=$(wc -c < assets/logo.png | tr -d ' ')
+          if [ "$PNG" -lt 10000 ]; then echo "png too small"; exit 1; fi
+      - name: Commit
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/logo.png assets/logo-solid.png assets/logo.png.b64 assets/logo-solid.png.b64 logo.js || true
-          if git diff --cached --quiet; then
-            echo "No asset changes to commit"
-          else
+          if [ -f assets/logo.png ] && [ "$(wc -c < assets/logo.png | tr -d ' ')" = "31568" ]; then
+            git rm -f assets/logo.png.b64.r* assets/logo-solid.png.b64.r* assets/logo.js.r* 2>/dev/null || true
+            git rm -rf assets/_micro 2>/dev/null || true
+          fi
+          if git diff --cached --quiet; then echo "no changes"; else
             git commit -m "Decode/assemble HOMELIGHT lettering logo assets"
             git push
           fi
