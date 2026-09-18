@@ -1,0 +1,43 @@
+name: Restore logo PNGs from last good commit
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/restore-pngs.yml'
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore assets from pre-corruption commit
+        run: |
+          set -euo pipefail
+          # 31b97e0 had good 30142-byte MAXWELL logos; restore those first so site isn't broken
+          git checkout 31b97e029746fea5e138d6f636f7ea8ba9be6ff0 -- assets/logo.png assets/logo-solid.png assets/logo.png.b64 assets/logo-solid.png.b64
+          echo "restored sizes:"
+          wc -c assets/logo.png assets/logo-solid.png assets/logo.png.b64 assets/logo-solid.png.b64
+          xxd -l 8 assets/logo.png
+      - name: Commit restore
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/logo.png assets/logo-solid.png assets/logo.png.b64 assets/logo-solid.png.b64
+          if git diff --cached --quiet; then
+            echo "nothing to restore"
+          else
+            git commit -m "Restore logo PNGs from last good commit (unbreak Pages)"
+            git push
+          fi
+      - name: Remove one-shot restore workflow
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/restore-pngs.yml
+          git commit -m "Remove one-shot restore-pngs workflow" || true
+          git push || true
