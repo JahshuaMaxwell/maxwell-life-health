@@ -1,1 +1,1 @@
-__LOAD__
+file:///tmp/FULL_CONTENT.txt
