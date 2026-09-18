@@ -1,1 +1,1 @@
-@/tmp/stdout_logo.js
+PLACEHOLDER_LOAD_FROM_DISK
