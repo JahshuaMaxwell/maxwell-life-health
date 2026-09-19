@@ -3,10 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'assets/*.b64'
-      - 'assets/*.b64.r*'
-      - 'assets/_micro/**'
-      - 'assets/logo.js.r*'
+      - 'assets/**'
       - '.github/workflows/decode-assets.yml'
   workflow_dispatch:
 permissions:
@@ -16,83 +13,69 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Assemble parts
+      - name: Assemble and decode
         run: |
           set -euo pipefail
           mkdir -p assets
-
-          python3 << 'PY'
+          python3 <<'PY'
           from pathlib import Path
+          import base64, re
           root = Path('assets/_micro')
           parts = {}
           if root.exists():
-              for p in root.glob('logo.js.p[0-9][0-9][0-9]'):
-                  parts[p.name] = p.read_bytes()
+              for p in root.iterdir():
+                  m = re.fullmatch(r'logo\.js\.p(\d{3})', p.name)
+                  if m:
+                      parts[int(m.group(1))] = p.read_bytes()
               for i in range(1, 37):
-                  segs = sorted(root.glob(f'logo.js.fix.p{i:03d}.s[0-9][0-9]'))
+                  segs = sorted(root.glob(f'logo.js.fix.p{i:03d}.s??'))
                   if len(segs) == 10:
-                      parts[f'logo.js.p{i:03d}'] = b''.join(bytes.fromhex(s.read_text().strip()) for s in segs)
+                      parts[i] = b''.join(bytes.fromhex(s.read_text().strip()) for s in segs)
                       print('applied fix segs', i)
-          if len(parts) >= 36 and all(f'logo.js.p{i:03d}' in parts for i in range(1, 37)):
-              data = b''.join(parts[f'logo.js.p{i:03d}'] for i in range(1, 37))
+          if all(i in parts for i in range(1, 37)):
+              data = b''.join(parts[i] for i in range(1, 37))
               Path('logo.js').write_bytes(data)
               print('assembled logo.js', len(data))
-          elif (root / 'logo.js.hex').exists():
-              import binascii
-              Path('logo.js').write_bytes(binascii.unhexlify((root / 'logo.js.hex').read_text().strip()))
-              print('assembled logo.js from hex', Path('logo.js').stat().st_size)
           else:
-              print('js parts incomplete', sorted(parts))
+              miss = [i for i in range(1, 37) if i not in parts]
+              print('js incomplete missing', miss)
+
+          png_parts = []
+          if root.exists():
+              for p in sorted(root.iterdir()):
+                  m = re.fullmatch(r'logo\.png\.b64\.p(\d{3})', p.name)
+                  if m:
+                      png_parts.append((int(m.group(1)), p))
+          print('png micro parts', len(png_parts))
+          if len(png_parts) == 85 and [i for i,_ in png_parts] == list(range(1, 86)):
+              b64 = b''.join(p.read_bytes().strip() for _, p in png_parts)
+              Path('assets/logo.png.b64').write_bytes(b64)
+              Path('assets/logo-solid.png.b64').write_bytes(b64)
+              png = base64.b64decode(b64)
+              Path('assets/logo.png').write_bytes(png)
+              Path('assets/logo-solid.png').write_bytes(png)
+              print('decoded png', len(png))
+          else:
+              print('png not ready')
           PY
-
-          if ls assets/_micro/logo.png.b64.p[0-9][0-9][0-9] >/dev/null 2>&1; then
-            N=$(ls assets/_micro/logo.png.b64.p[0-9][0-9][0-9] | wc -l | tr -d ' ')
-            echo "png micro parts=$N"
-            if [ "$N" = "85" ]; then
-              cat $(ls assets/_micro/logo.png.b64.p[0-9][0-9][0-9] | sort) > assets/logo.png.b64
-              echo "assembled logo.png.b64 $(wc -c < assets/logo.png.b64)"
-            else
-              echo "waiting for 85 png micro parts"
-            fi
-          fi
-
-          png_parts=$(ls assets/logo.png.b64.r* 2>/dev/null | wc -l | tr -d ' ')
-          js_parts=$(ls assets/logo.js.r* 2>/dev/null | wc -l | tr -d ' ')
-          if [ "$png_parts" = "7" ]; then
-            cat $(ls assets/logo.png.b64.r* | sort) > assets/logo.png.b64
-          fi
-          if [ "$js_parts" = "3" ]; then
-            cat $(ls assets/logo.js.r* | sort) > logo.js
-          fi
-
-          if [ -f assets/logo.png.b64 ]; then
-            cp assets/logo.png.b64 assets/logo-solid.png.b64
-          fi
-      - name: Decode PNGs
-        run: |
-          set -euo pipefail
-          if [ ! -f assets/logo.png.b64 ]; then
-            echo "no b64 yet"; exit 0
-          fi
-          BYTES=$(wc -c < assets/logo.png.b64 | tr -d ' ')
-          if [ "$BYTES" -lt 1000 ]; then echo "b64 too small"; exit 1; fi
-          base64 -d assets/logo.png.b64 > assets/logo.png
-          cp assets/logo.png assets/logo-solid.png
-          echo "decoded $(wc -c < assets/logo.png)"
-          xxd -l 8 assets/logo.png
-          PNG=$(wc -c < assets/logo.png | tr -d ' ')
-          if [ "$PNG" -lt 10000 ]; then echo "png too small"; exit 1; fi
       - name: Commit
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/logo.png assets/logo-solid.png assets/logo.png.b64 assets/logo-solid.png.b64 logo.js || true
+          git add -A
+          if [ -f assets/logo.png ]; then
+            echo "png size $(wc -c < assets/logo.png)"
+          fi
+          if [ -f logo.js ]; then
+            echo "logo.js size $(wc -c < logo.js)"
+          fi
           if [ -f assets/logo.png ] && [ "$(wc -c < assets/logo.png | tr -d ' ')" = "31568" ]; then
-            git rm -f assets/logo.png.b64.r* assets/logo-solid.png.b64.r* assets/logo.js.r* 2>/dev/null || true
             git rm -rf assets/_micro 2>/dev/null || true
           fi
-          if git diff --cached --quiet; then echo "no changes"; else
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
             git commit -m "Decode/assemble HOMELIGHT lettering logo assets"
             git push
           fi
