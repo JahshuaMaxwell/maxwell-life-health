@@ -1,5 +1,0 @@
-8osz+A0e5+sot9BQL9PUW6e/vA2u4+sotPL97P/VaFU8r3vn2HawZWsGL+w4SRQmrBwe4bMsG1qxaQamQo1Kts3nDmrSQmwhYQ5DvIyitbBOa6WZKbv7E7dlPbDxqJ37wBottFH2wFrwsYkopiLMLgbXKrm606Xtap5/1/RTsMi9zNzGz7zWqVHc7potAvdgWx/e5JTnnv9dIE7bWpYrRPAA2l/aUi1HVF1n/hRIb2r3X+Fs1ijh08J2LbfGmLi7BxXYRqBfbxXYRqBfbRaBebBfbRaBebBfbRaBebBeBerFdbBeBerFdbIu2/x88yu21l/Y3LgAAAABJRU5ErkJggg==';
-  document.querySelectorAll('img[src="assets/logo.png"]').forEach(function (img) {
-    img.src = src;
-  });
-})();
