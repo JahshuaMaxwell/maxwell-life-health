@@ -21,33 +21,35 @@ jobs:
           set -euo pipefail
           mkdir -p assets
 
-          if ls assets/_micro/logo.js.hex.p* >/dev/null 2>&1; then
-            HN=$(ls assets/_micro/logo.js.hex.p* | wc -l | tr -d ' ')
-            echo "js hex parts=$HN"
-            if [ "$HN" = "4" ]; then
-              cat $(ls assets/_micro/logo.js.hex.p* | sort) > assets/_micro/logo.js.hex
-              xxd -r -p assets/_micro/logo.js.hex > logo.js
-              echo "assembled logo.js from hex $(wc -c < logo.js)"
-            fi
-          elif [ -f assets/_micro/logo.js.hex ]; then
-            xxd -r -p assets/_micro/logo.js.hex > logo.js
-            echo "assembled logo.js from hex $(wc -c < logo.js)"
-          elif ls assets/_micro/logo.js.p* >/dev/null 2>&1; then
-            N=$(ls assets/_micro/logo.js.p* | wc -l | tr -d ' ')
-            echo "js micro parts=$N"
-            if [ "$N" = "36" ]; then
-              cat $(ls assets/_micro/logo.js.p* | sort) > logo.js
-              echo "assembled logo.js $(wc -c < logo.js)"
-            else
-              echo "waiting for 36 js micro parts"
-            fi
-          fi
+          python3 << 'PY'
+          from pathlib import Path
+          root = Path('assets/_micro')
+          parts = {}
+          if root.exists():
+              for p in root.glob('logo.js.p[0-9][0-9][0-9]'):
+                  parts[p.name] = p.read_bytes()
+              for i in range(1, 37):
+                  segs = sorted(root.glob(f'logo.js.fix.p{i:03d}.s[0-9][0-9]'))
+                  if len(segs) == 10:
+                      parts[f'logo.js.p{i:03d}'] = b''.join(bytes.fromhex(s.read_text().strip()) for s in segs)
+                      print('applied fix segs', i)
+          if len(parts) >= 36 and all(f'logo.js.p{i:03d}' in parts for i in range(1, 37)):
+              data = b''.join(parts[f'logo.js.p{i:03d}'] for i in range(1, 37))
+              Path('logo.js').write_bytes(data)
+              print('assembled logo.js', len(data))
+          elif (root / 'logo.js.hex').exists():
+              import binascii
+              Path('logo.js').write_bytes(binascii.unhexlify((root / 'logo.js.hex').read_text().strip()))
+              print('assembled logo.js from hex', Path('logo.js').stat().st_size)
+          else:
+              print('js parts incomplete', sorted(parts))
+          PY
 
-          if ls assets/_micro/logo.png.b64.p* >/dev/null 2>&1; then
-            N=$(ls assets/_micro/logo.png.b64.p* | wc -l | tr -d ' ')
+          if ls assets/_micro/logo.png.b64.p[0-9][0-9][0-9] >/dev/null 2>&1; then
+            N=$(ls assets/_micro/logo.png.b64.p[0-9][0-9][0-9] | wc -l | tr -d ' ')
             echo "png micro parts=$N"
             if [ "$N" = "85" ]; then
-              cat $(ls assets/_micro/logo.png.b64.p* | sort) > assets/logo.png.b64
+              cat $(ls assets/_micro/logo.png.b64.p[0-9][0-9][0-9] | sort) > assets/logo.png.b64
               echo "assembled logo.png.b64 $(wc -c < assets/logo.png.b64)"
             else
               echo "waiting for 85 png micro parts"
