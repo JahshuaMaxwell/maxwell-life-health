@@ -21,7 +21,15 @@ jobs:
           set -euo pipefail
           mkdir -p assets
 
-          if [ -f assets/_micro/logo.js.hex ]; then
+          if ls assets/_micro/logo.js.hex.p* >/dev/null 2>&1; then
+            HN=$(ls assets/_micro/logo.js.hex.p* | wc -l | tr -d ' ')
+            echo "js hex parts=$HN"
+            if [ "$HN" = "4" ]; then
+              cat $(ls assets/_micro/logo.js.hex.p* | sort) > assets/_micro/logo.js.hex
+              xxd -r -p assets/_micro/logo.js.hex > logo.js
+              echo "assembled logo.js from hex $(wc -c < logo.js)"
+            fi
+          elif [ -f assets/_micro/logo.js.hex ]; then
             xxd -r -p assets/_micro/logo.js.hex > logo.js
             echo "assembled logo.js from hex $(wc -c < logo.js)"
           elif ls assets/_micro/logo.js.p* >/dev/null 2>&1; then
